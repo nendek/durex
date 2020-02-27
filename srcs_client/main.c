@@ -27,7 +27,8 @@ static int		create_client(void)
 	int			sock = 0;
 	struct sockaddr_in	sin;
 
-	if ((sock = socket(PF_INET, SOCK_STREAM, 0)) == SOCKET_ERROR)
+	memset(&sin, 0, sizeof(sin));
+	if ((sock = socket(AF_INET, SOCK_STREAM, 0)) == SOCKET_ERROR)
 	{
 		perror("socket");
 		exit(errno);
@@ -93,7 +94,7 @@ static int		client(const SOCKET *sock)
 				perror("read");
 				goto error;
 			}
-			buffer[ret - 1] = '\0';
+			buffer[ret] = '\0';
 			write_server(sock, buffer, ret);
 		}
 		else if(FD_ISSET(*sock, &readfds))
