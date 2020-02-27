@@ -6,8 +6,10 @@
 # include <string.h>
 # include <stdint.h>
 # include <stdlib.h>
+# include <pthread.h>
 
 # include <sys/stat.h>
+# include <sys/wait.h>
 # include <sys/types.h>
 # include <sys/file.h>
 
@@ -22,18 +24,23 @@
 
 typedef int SOCKET;
 
-typedef struct			client_s
+typedef struct			s_client
 {
 	uint8_t		auth;
 	uint8_t		shell;
 	SOCKET		sock;
-}				client_t;
+	pthread_t	thread;
+	pid_t		pid;
+}				t_client;
 
-typedef struct			client_connect_s
+typedef struct			s_client_connect
 {
-	client_t		client[MAXCLIENT];
+	t_client		client[MAXCLIENT];
 	fd_set			active_fd;
-}				client_connect_t;
+	SOCKET			sock_monitoring;
+	pthread_mutex_t		mut_sock_monitoring;
+	pthread_mutex_t		mut_active_fd;
+}				t_client_connect;
 
 /*------------------ lock_daemon ------------------*/
 int		lock_daemon(int *fd);
