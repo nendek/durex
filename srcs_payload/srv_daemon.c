@@ -48,12 +48,33 @@ static int		write_client(const SOCKET sock, char *buffer, const int len)
 	return (0);
 }
 
+static void		ask_passwd(const SOCKET sock)
+{
+	char	str[] = "passwd:\n\0";
+
+	write_client(sock, str, 9);
+}
+
 static void		send_shutdown(const SOCKET sock)
 {
 	char	str[] = "shutdown\0";
 
 	write_client(sock, str, 9);
 }
+
+static void		send_in_shell(const SOCKET sock)
+{
+	char	str[] = "in_shell\0";
+
+	write_client(sock, str, 9);
+}
+
+//static void		send_out_shell(const SOCKET sock)
+//{
+//	char	str[] = "out_shell\0";
+//
+//	write_client(sock, str, 9);
+//}
 
 static void		all_shutdown(client_t *client, const int len)
 {
@@ -72,13 +93,6 @@ static int		all_close(client_t *client, const int len)
 			return (0);
 	}
 	return (1);
-}
-
-static void		ask_passwd(const SOCKET sock)
-{
-	char	str[] = "passwd:\n\0";
-
-	write_client(sock, str, 9);
 }
 
 static int		read_client(const SOCKET sd, uint8_t *auth)
@@ -122,6 +136,7 @@ static void		init_client(client_t *client, int len)
 	{
 		client[i].auth = 0;
 		client[i].sock = 0;
+		client[i].shell = 0;
 	}
 }
 
@@ -173,6 +188,12 @@ static int		get_client_by_sock(client_t *client, const int len, const SOCKET soc
 	return (0);
 }
 
+static void		init_start_shell(client_connect_t *client_connect, const SOCKET sock)
+{
+	FD_CLR(sock, &(client_connect->active_fd));
+	client_connect->client[get_client_by_sock(client_connect->client, MAXCLIENT, sock)].shell = 1;
+}
+
 static int		start_shell(const SOCKET sock)
 {
 	pid_t		pid;
@@ -198,25 +219,25 @@ int			run_server(const SOCKET *sock)
 {
 	struct sockaddr_in	info_client;
 	fd_set			readfds;
-	fd_set			active_fd;
 	socklen_t		size;
 	int			new_client;
+	int			index_client;
 	int			nb_client;
 	int			in_close;
 	int			ret;
 	int			max;
-	client_t		client[MAXCLIENT];
+	client_connect_t	client_connect;
 
 	nb_client = 0;
 	in_close = 0;
-	init_client(client, MAXCLIENT);
+	init_client(client_connect.client, MAXCLIENT);
 	size = sizeof(info_client);
-	FD_ZERO(&active_fd);
-	FD_SET(*sock, &active_fd);
+	FD_ZERO(&client_connect.active_fd);
+	FD_SET(*sock, &client_connect.active_fd);
 	while (1)
 	{
-		max = get_max(client, nb_client, *sock);
-		readfds = active_fd;
+		max = get_max(client_connect.client, MAXCLIENT, *sock);
+		readfds = client_connect.active_fd;
 		if (select(max + 1, &readfds, NULL, NULL, NULL) < 0)
 			goto err;
 		for (int i = 0; i < max + 1; i++)
@@ -229,11 +250,9 @@ int			run_server(const SOCKET *sock)
 						goto err;
 					if (nb_client < MAXCLIENT && in_close == 0)
 					{
-						FD_SET(new_client, &active_fd);
-						if (max < new_client)
-							max = new_client;
+						FD_SET(new_client, &client_connect.active_fd);
 						nb_client++;
-						add_sock_client(client, MAXCLIENT, new_client);
+						add_sock_client(client_connect.client, MAXCLIENT, new_client);
 						ask_passwd(new_client);
 					}
 					else
@@ -241,36 +260,38 @@ int			run_server(const SOCKET *sock)
 				}
 				else
 				{
-					int index_client = get_client_by_sock(client, MAXCLIENT, i);
-					ret = read_client(i, &(client[index_client]).auth);
+					index_client = get_client_by_sock(client_connect.client, MAXCLIENT, i);
+					ret = read_client(i, &(client_connect.client[index_client]).auth);
 					if (ret < 0)
 					{
-						FD_CLR(i, &active_fd);
+						FD_CLR(i, &client_connect.active_fd);
 						nb_client--;
-						clear_client(client, index_client);
+						clear_client(client_connect.client, index_client);
 					}
 					else if (ret == 1)
 					{
 						in_close = 1;
-						all_shutdown(client, MAXCLIENT);
+						all_shutdown(client_connect.client, MAXCLIENT);
 					}
 					else if (ret == 2)
 					{
+						init_start_shell(&client_connect, i);
+						send_in_shell(i);
 						start_shell(i);
 					}
 				}
 			}
 		}
-		if (in_close == 1 && (all_close(client, MAXCLIENT)) == 1)
+		if (in_close == 1 && (all_close(client_connect.client, MAXCLIENT)) == 1)
 		{
-			clear_clients(client, MAXCLIENT);
+			clear_clients(client_connect.client, MAXCLIENT);
 			close(*sock);
 			return (0);
 		}
 	}
 	return (0);
 err:
-	clear_clients(client, MAXCLIENT);
+	clear_clients(client_connect.client, MAXCLIENT);
 	close(*sock);
 	return (-1);
 }

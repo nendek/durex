@@ -44,9 +44,10 @@ static int		create_client(void)
 	return (sock);
 }
 
-static void		write_server(const SOCKET *sock, char *buffer, const int len)
+static void		write_server(const SOCKET *sock, char *buffer, const int len, const int *crypt_activ)
 {
-	encrypt_msg(buffer, len);
+	if (*crypt_activ)
+		encrypt_msg(buffer, len);
 	if (send(*sock, buffer, len,  0) < 0)
 	{
 		perror("send()");
@@ -54,7 +55,7 @@ static void		write_server(const SOCKET *sock, char *buffer, const int len)
 	}
 }
 
-static int		read_server(const SOCKET *sock, char *buffer)
+static int		read_server(const SOCKET *sock, char *buffer, const int *crypt_activ)
 {
 	int n = 0;
 
@@ -63,7 +64,8 @@ static int		read_server(const SOCKET *sock, char *buffer)
 		perror("recv()");
 		exit(errno);
 	}
-	decrypt_msg(buffer,n);
+	if (*crypt_activ)
+		decrypt_msg(buffer,n);
 	buffer[n] = '\0';
 	return (n);
 }
@@ -74,7 +76,9 @@ static int		client(const SOCKET *sock)
 	fd_set	active_fds;
 	char	buffer[BUFF_SIZE];
 	int	ret;
+	int	crypt_activ;
 
+	crypt_activ = 1;
 	FD_ZERO(&active_fds);
 	FD_SET(STDIN_FILENO, &active_fds);
 	FD_SET(*sock, &active_fds);
@@ -95,12 +99,12 @@ static int		client(const SOCKET *sock)
 				goto error;
 			}
 			buffer[ret] = '\0';
-			write_server(sock, buffer, ret);
+			write_server(sock, buffer, ret, &crypt_activ);
 		}
 		else if(FD_ISSET(*sock, &readfds))
 		{
 			memset(&buffer, '\0', BUFF_SIZE);
-			int n = read_server(sock, buffer);
+			int n = read_server(sock, buffer, &crypt_activ);
 			if (n == 0)
 			{
 				printf("Server is down !\n");
@@ -112,7 +116,18 @@ static int		client(const SOCKET *sock)
 				write(STDOUT_FILENO, "Server shutdown\n", 16);
 				return (0);
 			}
-			write(STDOUT_FILENO, &buffer, strlen(buffer));
+			if (!strcmp("in_shell", buffer))
+			{
+				crypt_activ = 0;
+			}
+			else if (!strcmp("out_shell", buffer))
+			{
+				crypt_activ = 1;
+			}
+			else
+			{
+				write(STDOUT_FILENO, &buffer, strlen(buffer));
+			}
 		}
 	}
 	close(*sock);

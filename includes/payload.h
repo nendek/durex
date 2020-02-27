@@ -25,8 +25,15 @@ typedef int SOCKET;
 typedef struct			client_s
 {
 	uint8_t		auth;
+	uint8_t		shell;
 	SOCKET		sock;
 }				client_t;
+
+typedef struct			client_connect_s
+{
+	client_t		client[MAXCLIENT];
+	fd_set			active_fd;
+}				client_connect_t;
 
 /*------------------ lock_daemon ------------------*/
 int		lock_daemon(int *fd);
