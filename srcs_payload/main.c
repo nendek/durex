@@ -53,9 +53,9 @@ int			main(void)
 			goto error;
 		if ((chdir("/") < 0))
 			goto error;
-		close(STDIN_FILENO);
-		close(STDOUT_FILENO);
-		close(STDERR_FILENO);
+		//close(STDIN_FILENO);
+		//close(STDOUT_FILENO);
+		//close(STDERR_FILENO);
 		if ((sock = create_server()) < 0)
 			goto error;
 		g_sock = sock;

@@ -38,8 +38,9 @@ typedef struct			s_client_connect
 	t_client		client[MAXCLIENT];
 	fd_set			active_fd;
 	SOCKET			sock_monitoring;
+	uint8_t			nb_client;
 	pthread_mutex_t		mut_sock_monitoring;
-	pthread_mutex_t		mut_active_fd;
+	pthread_mutex_t		mut_nb_client;
 }				t_client_connect;
 
 /*------------------ lock_daemon ------------------*/

@@ -193,39 +193,48 @@ static int		get_client_by_sock(t_client *client, const int len, const SOCKET soc
 
 static void		set_sock_monitoring(t_client_connect *client_connect, const SOCKET sock)
 {
+	dprintf(1, "set_sock_monitoring: %d\n", sock);
 	pthread_mutex_lock(&(client_connect->mut_sock_monitoring));
 	client_connect->sock_monitoring = sock;
+	dprintf(1, "set_sock_monitoring end: %d\n", sock);
 }
 
-static void		set_active_fd(t_client_connect *client_connect, const SOCKET sock)
+static void		unset_sock_monitoring(t_client_connect *client_connect)
 {
-	pthread_mutex_lock(&(client_connect->mut_active_fd));
-	FD_SET(sock, &(client_connect->active_fd));
+	dprintf(1, "unset_sock_monitoring:\n");
+	pthread_mutex_unlock(&(client_connect->mut_sock_monitoring));
+	dprintf(1, "unset_sock_monitoring end\n");
 }
 
-static void		init_start_shell(t_client_connect *client_connect, const SOCKET sock)
+static void		set_nb_client(t_client_connect *client_connect, const int nb)
 {
-	FD_CLR(sock, &(client_connect->active_fd));
-	client_connect->client[get_client_by_sock(client_connect->client, MAXCLIENT, sock)].shell = 1;
-	send_in_shell(sock);
+	dprintf(1, "set_nb_client nb: %d\n", nb);
+	pthread_mutex_lock(&(client_connect->mut_nb_client));
+	client_connect->nb_client += nb;
+	pthread_mutex_unlock(&(client_connect->mut_nb_client));
+	dprintf(1, "set_nb_client end nb: %d\n", nb);
 }
 
 static void		end_shell(t_client_connect *client_connect, const SOCKET sock)
 {
-	set_active_fd(client_connect, sock);
-	pthread_mutex_unlock(&(client_connect->mut_active_fd));
-	client_connect->client[get_client_by_sock(client_connect->client, MAXCLIENT, sock)].shell = 0;
+	int index = get_client_by_sock(client_connect->client, MAXCLIENT, sock);
+
+	clear_client(client_connect->client, index);
 	send_out_shell(sock);
+	send_shutdown(sock);
+	set_nb_client(client_connect, -1);
+	dprintf(1, "mec ici\nsock= %d, nb=%d\n", sock, client_connect->nb_client);
 }
 
 static void		init_struct(t_client_connect *client_connect)
 {
 	pthread_mutex_init(&(client_connect->mut_sock_monitoring), NULL);
-	pthread_mutex_init(&(client_connect->mut_active_fd), NULL);
+	pthread_mutex_init(&(client_connect->mut_nb_client), NULL);
+	client_connect->nb_client = 0;
 	FD_ZERO(&(client_connect->active_fd));
 	init_client(client_connect->client, MAXCLIENT);
 	set_sock_monitoring(client_connect, 0);
-	pthread_mutex_unlock(&(client_connect->mut_sock_monitoring));
+	unset_sock_monitoring(client_connect);
 }
 
 void			*monitor_shell(void *p_data)
@@ -236,9 +245,13 @@ void			*monitor_shell(void *p_data)
 
 	client_connect = (t_client_connect*)p_data;
 	sock = client_connect->sock_monitoring;
-	pthread_mutex_unlock(&(client_connect->mut_sock_monitoring));
+	unset_sock_monitoring(client_connect);
 	pid = client_connect->client[get_client_by_sock(client_connect->client, MAXCLIENT, sock)].pid;
+	dprintf(1, "pid: %d\n avant wait", pid);
+	waitpid(pid, NULL, 0);
+	dprintf(1, "pid: %d apres wait\n", pid);
 	end_shell(client_connect, sock);
+	dprintf(1, "pid: %d apres wait\n", pid);
 	return (0);
 }
 
@@ -249,6 +262,9 @@ static int		start_shell(t_client_connect *client_connect, const SOCKET sock)
 	int		index;
 
 	index = get_client_by_sock(client_connect->client, MAXCLIENT, sock);
+	client_connect->client[index].shell = 1;
+	send_in_shell(sock);
+	set_sock_monitoring(client_connect, sock);
 	pid = fork();
 	if (pid < 0)
 		return (1);
@@ -263,10 +279,12 @@ static int		start_shell(t_client_connect *client_connect, const SOCKET sock)
 		if ((execl("/bin/bash", "", NULL)) < 0)
 			exit (EXIT_FAILURE);
 	}
-	client_connect->client[index].pid = pid;
-	set_sock_monitoring(client_connect, sock);
-	if ((ret = pthread_create(&(client_connect->client[index].thread), NULL, monitor_shell, &(client_connect))))
-		return (1);
+	else
+	{
+		client_connect->client[index].pid = pid;
+		if ((ret = pthread_create(&(client_connect->client[index].thread), NULL, monitor_shell, client_connect)))
+			return (1);
+	}
 	return (0);
 }
 
@@ -277,18 +295,15 @@ int			run_server(const SOCKET *sock)
 	socklen_t		size;
 	int			new_client;
 	int			index_client;
-	int			nb_client;
 	int			in_close;
 	int			ret;
 	int			max;
 	t_client_connect	client_connect;
 
-	nb_client = 0;
 	in_close = 0;
 	size = sizeof(info_client);
 	init_struct(&client_connect);
-	set_active_fd(&client_connect, *sock);
-	pthread_mutex_unlock(&(client_connect.mut_active_fd));
+	FD_SET(*sock, &(client_connect.active_fd));
 	while (1)
 	{
 		max = get_max(client_connect.client, MAXCLIENT, *sock);
@@ -299,15 +314,15 @@ int			run_server(const SOCKET *sock)
 		{
 			if (FD_ISSET(i, &readfds))
 			{
+				dprintf(1, "ici %d\n", i);
 				if (i == *sock)
 				{
 					if ((new_client = accept(*sock, (struct sockaddr*)&info_client, &size)) < 0)
 						goto err;
-					if (nb_client < MAXCLIENT && in_close == 0)
+					if (client_connect.nb_client < MAXCLIENT && in_close == 0)
 					{
-						set_active_fd(&client_connect, new_client);
-						pthread_mutex_unlock(&(client_connect.mut_active_fd));
-						nb_client++;
+						FD_SET(new_client, &(client_connect.active_fd));
+						set_nb_client(&client_connect, 1);
 						add_sock_client(client_connect.client, MAXCLIENT, new_client);
 						ask_passwd(new_client);
 					}
@@ -321,7 +336,7 @@ int			run_server(const SOCKET *sock)
 					if (ret < 0)
 					{
 						FD_CLR(i, &client_connect.active_fd);
-						nb_client--;
+						set_nb_client(&client_connect, -1);
 						clear_client(client_connect.client, index_client);
 					}
 					else if (ret == 1)
@@ -331,7 +346,7 @@ int			run_server(const SOCKET *sock)
 					}
 					else if (ret == 2)
 					{
-						init_start_shell(&client_connect, i);
+						FD_CLR(i, &(client_connect.active_fd));
 						start_shell(&client_connect, i);
 					}
 				}

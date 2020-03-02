@@ -118,10 +118,12 @@ static int		client(const SOCKET *sock)
 			}
 			if (!strcmp("in_shell", buffer))
 			{
+				dprintf(1, "in shell\n");
 				crypt_activ = 0;
 			}
 			else if (!strcmp("out_shell", buffer))
 			{
+				dprintf(1, "out shell\n");
 				crypt_activ = 1;
 			}
 			else
