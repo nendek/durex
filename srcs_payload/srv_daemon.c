@@ -49,6 +49,13 @@ static int		write_client(const SOCKET sock, char *buffer, const int len)
 	return (0);
 }
 
+static int		write_client_inshell(const SOCKET sock, char *buffer, const int len)
+{
+	if (send(sock, buffer, len, 0) < 0)
+		return (-1);
+	return (0);
+}
+
 static void		ask_passwd(const SOCKET sock)
 {
 	char	str[] = "passwd:\n\0";
@@ -56,11 +63,14 @@ static void		ask_passwd(const SOCKET sock)
 	write_client(sock, str, 9);
 }
 
-static void		send_shutdown(const SOCKET sock)
+static void		send_shutdown(const SOCKET sock, uint8_t in_shell)
 {
 	char	str[] = "shutdown\0";
-
-	write_client(sock, str, 9);
+	
+	if (in_shell)
+		write_client_inshell(sock, str, 9);
+	else
+		write_client(sock, str, 9);
 }
 
 static void		send_in_shell(const SOCKET sock)
@@ -82,7 +92,9 @@ static void		all_shutdown(t_client *client, const int len)
 	for (int i = 0; i < len; i++)
 	{
 		if (client[i].sock != 0)
-			send_shutdown(client[i].sock);
+		{
+			send_shutdown(client[i].sock, client[i].shell);
+		}
 	}
 }
 
@@ -96,13 +108,13 @@ static int		all_close(t_client *client, const int len)
 	return (1);
 }
 
-static int		read_client(const SOCKET sd, uint8_t *auth)
+static int		read_client(const SOCKET sock, uint8_t *auth)
 {
 	char			buffer[MAXMSG];
 	int			n;
 
 	memset(buffer, '\0', MAXMSG);
-	n = recv(sd, buffer, MAXMSG - 1, 0);
+	n = recv(sock, buffer, MAXMSG - 1, 0);
 	decrypt_msg(buffer, n);
 	if (buffer[n - 1] == '\n')
 		buffer[n - 1] = '\0';
@@ -119,7 +131,7 @@ static int		read_client(const SOCKET sd, uint8_t *auth)
 				*auth = 1;
 				return (0);
 			}
-			ask_passwd(sd);
+			ask_passwd(sock);
 			return (0);
 		}
 		if ((strcmp(buffer, "quit")) == 0)
@@ -131,24 +143,15 @@ static int		read_client(const SOCKET sd, uint8_t *auth)
 	return (0);
 }
 
-static void		init_client(t_client *client, int len)
-{
-	for (int i = 0; i < len; i++)
-	{
-		client[i].auth = 0;
-		client[i].sock = 0;
-		client[i].shell = 0;
-		client[i].thread = 0;
-		client[i].pid = 0;
-	}
-}
-
 static void		clear_client(t_client *client, const int i)
 {
 	if (client[i].sock > 0)
 		close(client[i].sock);
-	client[i].sock = 0;
 	client[i].auth = 0;
+	client[i].sock = 0;
+	client[i].shell = 0;
+	client[i].thread = 0;
+	client[i].pid = 0;
 }
 
 static void		clear_clients(t_client *client, const int len)
@@ -188,6 +191,7 @@ static int		get_client_by_sock(t_client *client, const int len, const SOCKET soc
 		if (client[i].sock == sock)
 			return (i);
 	}
+	dprintf(1, "ICI PAS BON\n");
 	return (0);
 }
 
@@ -208,11 +212,9 @@ static void		unset_sock_monitoring(t_client_connect *client_connect)
 
 static void		set_nb_client(t_client_connect *client_connect, const int nb)
 {
-	dprintf(1, "set_nb_client nb: %d\n", nb);
 	pthread_mutex_lock(&(client_connect->mut_nb_client));
 	client_connect->nb_client += nb;
 	pthread_mutex_unlock(&(client_connect->mut_nb_client));
-	dprintf(1, "set_nb_client end nb: %d\n", nb);
 }
 
 static void		end_shell(t_client_connect *client_connect, const SOCKET sock)
@@ -221,9 +223,20 @@ static void		end_shell(t_client_connect *client_connect, const SOCKET sock)
 
 	clear_client(client_connect->client, index);
 	send_out_shell(sock);
-	send_shutdown(sock);
+	send_shutdown(sock, 0);
 	set_nb_client(client_connect, -1);
-	dprintf(1, "mec ici\nsock= %d, nb=%d\n", sock, client_connect->nb_client);
+}
+
+static void		init_client(t_client *client, int len)
+{
+	for (int i = 0; i < len; i++)
+	{
+		client[i].auth = 0;
+		client[i].sock = 0;
+		client[i].shell = 0;
+		client[i].thread = 0;
+		client[i].pid = 0;
+	}
 }
 
 static void		init_struct(t_client_connect *client_connect)
@@ -338,6 +351,7 @@ int			run_server(const SOCKET *sock)
 						FD_CLR(i, &client_connect.active_fd);
 						set_nb_client(&client_connect, -1);
 						clear_client(client_connect.client, index_client);
+						dprintf(1, "clear client ret < 0: %d\n", client_connect.client[i].sock);
 					}
 					else if (ret == 1)
 					{
