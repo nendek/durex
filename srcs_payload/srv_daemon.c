@@ -80,13 +80,6 @@ static void		send_in_shell(const SOCKET sock)
 	write_client(sock, str, 9);
 }
 
-static void		send_out_shell(const SOCKET sock)
-{
-	char	str[] = "out_shell\0";
-
-	write_client(sock, str, 9);
-}
-
 static void		all_shutdown(t_client *client, const int len)
 {
 	for (int i = 0; i < len; i++)
@@ -147,8 +140,8 @@ static void		clear_client(t_client *client, const int i)
 {
 	if (client[i].sock > 0)
 		close(client[i].sock);
-	client[i].auth = 0;
 	client[i].sock = 0;
+	client[i].auth = 0;
 	client[i].shell = 0;
 	client[i].thread = 0;
 	client[i].pid = 0;
@@ -191,23 +184,18 @@ static int		get_client_by_sock(t_client *client, const int len, const SOCKET soc
 		if (client[i].sock == sock)
 			return (i);
 	}
-	dprintf(1, "ICI PAS BON\n");
 	return (0);
 }
 
 static void		set_sock_monitoring(t_client_connect *client_connect, const SOCKET sock)
 {
-	dprintf(1, "set_sock_monitoring: %d\n", sock);
 	pthread_mutex_lock(&(client_connect->mut_sock_monitoring));
 	client_connect->sock_monitoring = sock;
-	dprintf(1, "set_sock_monitoring end: %d\n", sock);
 }
 
 static void		unset_sock_monitoring(t_client_connect *client_connect)
 {
-	dprintf(1, "unset_sock_monitoring:\n");
 	pthread_mutex_unlock(&(client_connect->mut_sock_monitoring));
-	dprintf(1, "unset_sock_monitoring end\n");
 }
 
 static void		set_nb_client(t_client_connect *client_connect, const int nb)
@@ -215,16 +203,6 @@ static void		set_nb_client(t_client_connect *client_connect, const int nb)
 	pthread_mutex_lock(&(client_connect->mut_nb_client));
 	client_connect->nb_client += nb;
 	pthread_mutex_unlock(&(client_connect->mut_nb_client));
-}
-
-static void		end_shell(t_client_connect *client_connect, const SOCKET sock)
-{
-	int index = get_client_by_sock(client_connect->client, MAXCLIENT, sock);
-
-	clear_client(client_connect->client, index);
-	send_out_shell(sock);
-	send_shutdown(sock, 0);
-	set_nb_client(client_connect, -1);
 }
 
 static void		init_client(t_client *client, int len)
@@ -255,16 +233,18 @@ void			*monitor_shell(void *p_data)
 	t_client_connect	*client_connect;
 	SOCKET			sock;
 	pid_t			pid;
+	int			index;
 
 	client_connect = (t_client_connect*)p_data;
 	sock = client_connect->sock_monitoring;
+	index = get_client_by_sock(client_connect->client, MAXCLIENT, sock);
 	unset_sock_monitoring(client_connect);
-	pid = client_connect->client[get_client_by_sock(client_connect->client, MAXCLIENT, sock)].pid;
-	dprintf(1, "pid: %d\n avant wait", pid);
+	pid = client_connect->client[index].pid;
 	waitpid(pid, NULL, 0);
-	dprintf(1, "pid: %d apres wait\n", pid);
-	end_shell(client_connect, sock);
-	dprintf(1, "pid: %d apres wait\n", pid);
+	send_shutdown(sock, 1);
+	read_client(sock, (uint8_t *)1);
+	clear_client(client_connect->client, index);
+	set_nb_client(client_connect, -1);
 	return (0);
 }
 
@@ -327,7 +307,7 @@ int			run_server(const SOCKET *sock)
 		{
 			if (FD_ISSET(i, &readfds))
 			{
-				dprintf(1, "ici %d\n", i);
+				dprintf(0, "ici %d\n", i);
 				if (i == *sock)
 				{
 					if ((new_client = accept(*sock, (struct sockaddr*)&info_client, &size)) < 0)
@@ -351,7 +331,6 @@ int			run_server(const SOCKET *sock)
 						FD_CLR(i, &client_connect.active_fd);
 						set_nb_client(&client_connect, -1);
 						clear_client(client_connect.client, index_client);
-						dprintf(1, "clear client ret < 0: %d\n", client_connect.client[i].sock);
 					}
 					else if (ret == 1)
 					{
