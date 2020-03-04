@@ -1,0 +1,36 @@
+CC = gcc
+CFLAGS = -Wall -Wextra -Werror
+
+NAME = Packer
+FILES = woody.c creation.c crypto.c libft_handler.c \
+		get_case64.c handle_64.c \
+
+SRCS_DIR = srcs_packer
+SRCS = $(addprefix $(SRCS_DIR)/,$(FILES))
+
+INCS_DIR = includes
+INCS = -I $(INCS_DIR)
+
+OBJS_DIR = objs_packer
+OBJS = $(addprefix $(OBJS_DIR)/,$(FILES:%.c=%.o))
+
+all: $(NAME)
+
+$(NAME): $(OBJS_DIR) $(OBJS)
+		$(CC) $(CFLAGS) $(INCS) -o $(NAME) $(OBJS)
+
+$(OBJS_DIR):
+		mkdir -p $(OBJS_DIR)
+
+$(OBJS_DIR)/%.o: $(SRCS_DIR)/%.c
+		$(CC) $(CFLAGS) $(INCS) -c -o $@ $<
+
+clean:
+		rm -rf $(OBJS_DIR)
+
+fclean: clean
+		rm -f $(NAME)
+
+re: fclean all
+
+.PHONY: all clean fclean re
