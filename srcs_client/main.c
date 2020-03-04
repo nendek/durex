@@ -120,6 +120,8 @@ static int		client(const SOCKET *sock)
 				crypt_activ = 0;
 			else
 				write(STDOUT_FILENO, &buffer, strlen(buffer));
+			if (crypt_activ == 0)
+				write(STDIN_FILENO, "$>", 2);
 		}
 	}
 	close(*sock);

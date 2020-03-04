@@ -54,4 +54,6 @@ dkms.conf
 Client
 Payload
 Durex
+Packer
+Payload_packed
 *.swp
