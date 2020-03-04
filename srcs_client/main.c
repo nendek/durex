@@ -116,20 +116,10 @@ static int		client(const SOCKET *sock)
 				write(STDOUT_FILENO, "Server shutdown\n", 16);
 				return (0);
 			}
-			if (!strcmp("in_shell", buffer))
-			{
-				dprintf(1, "in shell\n");
+			else if (!strcmp("in_shell", buffer))
 				crypt_activ = 0;
-			}
-			else if (!strcmp("out_shell", buffer))
-			{
-				dprintf(1, "out shell\n");
-				crypt_activ = 1;
-			}
 			else
-			{
 				write(STDOUT_FILENO, &buffer, strlen(buffer));
-			}
 		}
 	}
 	close(*sock);

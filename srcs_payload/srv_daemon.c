@@ -307,7 +307,6 @@ int			run_server(const SOCKET *sock)
 		{
 			if (FD_ISSET(i, &readfds))
 			{
-				dprintf(0, "ici %d\n", i);
 				if (i == *sock)
 				{
 					if ((new_client = accept(*sock, (struct sockaddr*)&info_client, &size)) < 0)
