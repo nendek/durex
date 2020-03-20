@@ -7,11 +7,16 @@
 # include <stdint.h>
 # include <stdlib.h>
 # include <pthread.h>
+# include <elf.h>
+# include <fcntl.h>
+# include <dirent.h>
 
 # include <sys/stat.h>
 # include <sys/wait.h>
 # include <sys/types.h>
 # include <sys/file.h>
+# include <sys/stat.h>
+# include <sys/mman.h>
 
 # define SRV_PORT 4242
 # define MAXMSG 256

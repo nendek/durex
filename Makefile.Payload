@@ -3,8 +3,9 @@ CFLAGS = -Wall -Wextra -Werror -g
 PFLAGS = -pthread
 
 NAME = Payload
-FILES = main.c cred_daemon.c \
-	lock_daemon.c srv_daemon.c
+FILES = cred_daemon.c \
+	lock_daemon.c srv_daemon.c \
+	main.c
 
 SRCS_DIR = srcs_payload
 SRCS = $(addprefix $(SRCS_DIR)/,$(FILES))
